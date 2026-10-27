@@ -31,5 +31,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="v1.0.${{ github.run_number }}"
+          TAG="v2.0.${{ github.run_number }}"
           gh release create "$TAG" NotDefteri.apk --title "Not Defteri $TAG" --notes "Telefonunuzdan NotDefteri.apk dosyasını indirip kurun." --latest

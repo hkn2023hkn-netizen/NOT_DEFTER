@@ -60,7 +60,7 @@ object AlarmScheduler {
     fun schedule(context: Context, item: Item) {
         cancel(context, item)
         val due = item.dueAt ?: return
-        if (item.done) return
+        if (item.done || item.deletedAt != null) return
         val now = System.currentTimeMillis()
         if (item.remindBeforeMinutes > 0) {
             val early = due - item.remindBeforeMinutes * 60_000L

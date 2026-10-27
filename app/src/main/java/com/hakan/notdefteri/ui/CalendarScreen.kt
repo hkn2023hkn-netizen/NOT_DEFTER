@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hakan.notdefteri.data.Item
 import com.hakan.notdefteri.data.ItemType
+import com.hakan.notdefteri.data.Markdown
 import java.text.SimpleDateFormat
 import java.util.Calendar
 
@@ -131,29 +132,29 @@ fun CalendarScreen(items: List<Item>, onOpen: (Item) -> Unit, onNew: (ItemType, 
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 4.dp)
-                    .yellowPaper()
+                    .yellowPaper(LocalPaper.current)
                     .clickable { onOpen(item) }
                     .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(formatTime(item.dueAt!!), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Navy)
+                Text(formatTime(item.dueAt!!), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = LocalPaper.current.ink)
                 Spacer(Modifier.width(12.dp))
                 Icon(
                     if (item.type == ItemType.TASK) Icons.Filled.CheckCircle else Icons.Filled.StickyNote2,
-                    null, Modifier.size(18.dp), tint = Color(0xFF5D4037)
+                    null, Modifier.size(18.dp), tint = LocalPaper.current.inkSoft
                 )
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        item.title.ifBlank { item.content.ifBlank { "(Başlıksız)" } },
-                        maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 16.sp,
+                        if (item.locked) "Kilitli not" else item.title.ifBlank { Markdown.toPlain(item.content).trim().ifBlank { "(Başlıksız)" } },
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 16.sp, color = LocalPaper.current.ink,
                         textDecoration = if (item.done) TextDecoration.LineThrough else null
                     )
                     val extra = buildList {
                         if (item.remindBeforeMinutes > 0) add(ReminderOptions.firstOrNull { it.first == item.remindBeforeMinutes }?.second ?: "")
                         if (item.alarmAtDue) add("zamanında alarm")
                     }.joinToString(" + ")
-                    if (extra.isNotBlank()) Text(extra, fontSize = 12.sp, color = Color(0xFF5D4037))
+                    if (extra.isNotBlank()) Text(extra, fontSize = 12.sp, color = LocalPaper.current.inkSoft)
                 }
             }
         }
@@ -219,7 +220,7 @@ private fun MonthGrid(monthStart: Long, selectedDay: Long, withDue: List<Item>, 
                                 Modifier
                                     .fillMaxSize()
                                     .clip(CircleShape)
-                                    .background(if (isSelected) Navy else Color.Transparent)
+                                    .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
                                     .then(if (isToday && !isSelected) Modifier.border(2.dp, Gold, CircleShape) else Modifier)
                                     .clickable { onSelect(dayMillis) },
                                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -227,7 +228,7 @@ private fun MonthGrid(monthStart: Long, selectedDay: Long, withDue: List<Item>, 
                             ) {
                                 Text(
                                     "$dayNum",
-                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                                     fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal
                                 )
                                 if (dayEntries.isNotEmpty()) {

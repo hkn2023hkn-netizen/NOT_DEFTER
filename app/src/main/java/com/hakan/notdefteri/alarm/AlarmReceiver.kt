@@ -25,7 +25,8 @@ class AlarmReceiver : BroadcastReceiver() {
         }
 
         val item = Repository.get(id) ?: return
-        val title = item.title.ifBlank { if (item.type == ItemType.TASK) "Görev" else "Not" }
+        val title = if (item.locked) "Kilitli not" else item.title.ifBlank { if (item.type == ItemType.TASK) "Görev" else "Not" }
+        val body = if (item.locked) "" else item.content
         val time = item.dueAt?.let { SimpleDateFormat("d MMMM HH:mm", Locale.forLanguageTag("tr")).format(Date(it)) } ?: ""
         val text = if (early) "Yaklaşıyor: ${item.remindBeforeMinutes.toBeforeText()} sonra ($time)" else "Zamanı geldi ($time)"
 
@@ -51,7 +52,7 @@ class AlarmReceiver : BroadcastReceiver() {
             .setSmallIcon(R.drawable.ic_stat_alarm)
             .setContentTitle(title)
             .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text + if (item.content.isNotBlank()) "\n" + item.content.take(200) else ""))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text + if (body.isNotBlank()) "\n" + body.take(200) else ""))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)

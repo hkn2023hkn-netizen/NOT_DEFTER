@@ -38,7 +38,7 @@ class AlarmActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val id = intent.getIntExtra(AlarmScheduler.EXTRA_ITEM_ID, -1)
         val early = intent.getBooleanExtra(AlarmScheduler.EXTRA_EARLY, false)
-        val item = Repository.get(id)
+        val item = Repository.get(id)?.let { if (it.locked) it.copy(title = "Kilitli not", content = "") else it }
         val time = item?.dueAt?.let { SimpleDateFormat("d MMMM yyyy  HH:mm", Locale.forLanguageTag("tr")).format(Date(it)) } ?: ""
 
         setContent {

@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.StickyNote2
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -21,6 +22,7 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -50,10 +52,12 @@ import com.hakan.notdefteri.data.Repository
 fun AppRoot(needsFullScreenPermission: Boolean, onOpenFullScreenSettings: () -> Unit) {
     var tab by rememberSaveable { mutableStateOf(0) }
     var editorOpen by rememberSaveable { mutableStateOf(false) }
+    var subScreen by rememberSaveable { mutableStateOf("") } // "", "settings", "trash"
     var editorId by rememberSaveable { mutableStateOf(-1) }
     var editorType by rememberSaveable { mutableStateOf(ItemType.NOTE.name) }
     var editorPresetDue by rememberSaveable { mutableStateOf<Long?>(null) }
-    val items by Repository.items.collectAsState()
+    val allItems by Repository.items.collectAsState()
+    val items = allItems.filter { it.deletedAt == null }
 
     fun openEditor(id: Int, type: ItemType, presetDue: Long? = null) {
         editorId = id
@@ -71,6 +75,10 @@ fun AppRoot(needsFullScreenPermission: Boolean, onOpenFullScreenSettings: () -> 
         )
         return
     }
+    when (subScreen) {
+        "settings" -> { SettingsScreen(onBack = { subScreen = "" }, onOpenTrash = { subScreen = "trash" }); return }
+        "trash" -> { TrashScreen(onBack = { subScreen = "settings" }); return }
+    }
 
     Scaffold(
         topBar = {
@@ -87,9 +95,13 @@ fun AppRoot(needsFullScreenPermission: Boolean, onOpenFullScreenSettings: () -> 
                         Text("Not Defteri", fontWeight = FontWeight.Bold)
                     }
                 },
+                actions = {
+                    IconButton(onClick = { subScreen = "settings" }) { Icon(Icons.Filled.Settings, "Ayarlar") }
+                },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Navy,
-                    titleContentColor = Color.White
+                    containerColor = barColor(),
+                    titleContentColor = Color.White,
+                    actionIconContentColor = Color.White
                 )
             )
         },

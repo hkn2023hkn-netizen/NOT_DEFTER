@@ -7,6 +7,13 @@ Android için not ve görev uygulaması.
 - **Takvim**: aylık görünüm, hatırlatıcılı günler işaretli; seçilen güne görev ya da not eklenebilir
 - Alarmlar: zamanından önce (5 dk – 1 gün) ve tam zamanında; kilit ekranında açılır, "Kapat" denene kadar çalar
 - Telefon yeniden başlatılınca alarmlar yeniden kurulur
+- Markdown düzenleyici: kalın, italik, başlık, liste, yapılacaklar, alıntı, kod bloğu (araç çubuğu ve önizleme)
+- Her değişiklik anında SQLite veritabanına kaydedilir
+- Sabitleme, favoriler, 30 günlük çöp kutusu
+- Dışa aktarma: PDF, TXT, Markdown, HTML; tümünü ZIP yedek
+- İçe aktarma: Google Keep (Takeout), Evernote (.enex), Markdown/metin
+- Parola ile uygulama kilidi ve AES-256 şifreli notlar
+- Açık / koyu tema
 - Simge: pusula logosu
 
 Gereksinim: Android 8.0 ve üzeri.
