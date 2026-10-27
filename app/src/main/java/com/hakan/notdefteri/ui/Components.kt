@@ -119,13 +119,14 @@ fun PasswordDialog(
     )
 }
 
+/** Parola alanı: yalnızca rakam kabul eder, rakam klavyesi açılır. */
 @Composable
 fun PasswordField(value: String, onChange: (String) -> Unit, label: String, isError: Boolean = false) {
     OutlinedTextField(
-        value = value, onValueChange = onChange, label = { Text(label) }, singleLine = true,
+        value = value, onValueChange = { onChange(it.filter { c -> c in '0'..'9' }) }, label = { Text(label) }, singleLine = true,
         isError = isError,
         visualTransformation = PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
         modifier = Modifier.fillMaxWidth()
     )
 }

@@ -363,26 +363,15 @@ private fun EditorContent(
             }
             // Sarı kağıt
             val lineHeight = 28.sp
-            val linePx = with(LocalDensity.current) { lineHeight.toPx() }
+            val paperMin = if (keyboardOpen) maxOf(320.dp, viewport - 24.dp) else 320.dp
             Column(
                 Modifier
                     .fillMaxWidth()
                     // Klavye açıkken sarı kağıt görünen alanın tamamını kaplar
-                    .heightIn(min = if (keyboardOpen) maxOf(320.dp, viewport - 24.dp) else 320.dp)
-                    .yellowPaper(paper, lineSpacingPx = if (preview) 0f else linePx)
+                    .heightIn(min = paperMin)
+                    .yellowPaper(paper)
                     .padding(top = 6.dp)
             ) {
-                val fieldColors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    focusedTextColor = paper.ink,
-                    unfocusedTextColor = paper.ink,
-                    focusedPlaceholderColor = paper.inkSoft.copy(alpha = 0.6f),
-                    unfocusedPlaceholderColor = paper.inkSoft.copy(alpha = 0.6f),
-                    cursorColor = paper.ink,
-                )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (type == ItemType.TASK) {
                         Checkbox(
@@ -390,12 +379,12 @@ private fun EditorContent(
                             colors = CheckboxDefaults.colors(uncheckedColor = paper.inkSoft, checkedColor = Navy)
                         )
                     }
-                    TextField(
+                    LinedTextField(
                         value = title, onValueChange = { title = it },
-                        placeholder = { Text("Başlık") },
-                        textStyle = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold, lineHeight = lineHeight, color = paper.ink),
-                        colors = fieldColors, singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        placeholder = "Başlık",
+                        textStyle = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold, lineHeight = lineHeight),
+                        paper = paper, singleLine = true,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                 }
                 if (preview) {
@@ -418,20 +407,14 @@ private fun EditorContent(
                         )
                     }
                 } else {
-                    TextField(
+                    LinedTextField(
                         value = content,
                         onValueChange = { content = TextFormat.continueList(content, it) },
-                        placeholder = {
-                            Text(
-                                if (type == ItemType.NOTE) "Notunuzu yazın...\n**kalın**, *italik*, - liste, - [ ] yapılacak, ``` kod"
-                                else "Görev ayrıntıları..."
-                            )
-                        },
-                        textStyle = TextStyle(fontSize = 17.sp, lineHeight = lineHeight, color = paper.ink),
-                        colors = fieldColors,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 240.dp)
+                        placeholder = if (type == ItemType.NOTE) "Notunuzu yazın..." else "Görev ayrıntıları...",
+                        textStyle = TextStyle(fontSize = 17.sp, lineHeight = lineHeight),
+                        paper = paper,
+                        // Kağıdın kalanını doldursun ki çizgiler en alta kadar insin ve her yere dokunulabilsin
+                        minHeight = paperMin - 70.dp,
                     )
                 }
             }
@@ -655,7 +638,7 @@ fun NewPasswordDialog(onDismiss: () -> Unit, onSet: (String) -> Unit, title: Str
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Bu parola kilitli notları ve uygulama kilidini açar. Unutursanız kilitli notlar kurtarılamaz.", fontSize = 13.sp)
-                PasswordField(pw1, { pw1 = it; error = null }, "Yeni parola")
+                PasswordField(pw1, { pw1 = it; error = null }, "Yeni parola (sadece rakam)")
                 PasswordField(pw2, { pw2 = it; error = null }, "Parolayı tekrar yazın", error != null)
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
             }
@@ -663,7 +646,7 @@ fun NewPasswordDialog(onDismiss: () -> Unit, onSet: (String) -> Unit, title: Str
         confirmButton = {
             TextButton(onClick = {
                 error = when {
-                    pw1.length < 4 -> "Parola en az 4 karakter olmalı"
+                    pw1.length < 4 -> "Parola en az 4 rakam olmalı"
                     pw1 != pw2 -> "Parolalar aynı değil"
                     else -> null
                 }
