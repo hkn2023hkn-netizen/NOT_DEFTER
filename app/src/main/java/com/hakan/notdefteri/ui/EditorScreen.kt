@@ -12,6 +12,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -169,7 +173,7 @@ fun EditorScreen(itemId: Int, newType: ItemType, presetDue: Long?, onClose: () -
     EditorContent(original, newType, presetDue, plain.first, plain.second, onClose)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun EditorContent(
     original: Item?,
@@ -335,11 +339,18 @@ private fun EditorContent(
             }
         }
     ) { padding ->
-        Column(
+        // Düzenleme modunda klavye boşluğunu alttaki araç çubuğu zaten bırakıyor; iki kez eklenirse yazı alanı tek satıra iner
+        BoxWithConstraints(
             Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .imePadding()
+                .then(if (preview) Modifier.imePadding() else Modifier)
+        ) {
+        val viewport = maxHeight
+        val keyboardOpen = WindowInsets.isImeVisible
+        Column(
+            Modifier
+                .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(12.dp)
         ) {
@@ -356,7 +367,8 @@ private fun EditorContent(
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 320.dp)
+                    // Klavye açıkken sarı kağıt görünen alanın tamamını kaplar
+                    .heightIn(min = if (keyboardOpen) maxOf(320.dp, viewport - 24.dp) else 320.dp)
                     .yellowPaper(paper, lineSpacingPx = if (preview) 0f else linePx)
                     .padding(top = 6.dp)
             ) {
@@ -485,6 +497,7 @@ private fun EditorContent(
                 onAlarmAtDue = { alarmAtDue = it }
             )
             Spacer(Modifier.height(40.dp))
+        }
         }
     }
 
