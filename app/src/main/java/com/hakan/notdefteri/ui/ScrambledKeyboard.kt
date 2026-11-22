@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.sp
 import java.security.SecureRandom
 import java.util.Locale
 
-private val TR = Locale("tr")
+private val TR_KEYS = Locale("tr")
 private const val LETTERS = "abcçdefgğhıijklmnoöpqrsştuüvwxyz"
 private const val DIGITS = "0123456789"
 private const val SYMBOLS = ".,-_!?@#\$%&*+=/()[]:;'\"<>~^|\\{}`€£"
@@ -89,7 +89,7 @@ fun ScrambledKeyboard(onChar: (Char) -> Unit, onBackspace: () -> Unit) {
     var upper by remember { mutableStateOf(false) }
     var symbols by remember { mutableStateOf(false) }
 
-    val keys = if (symbols) symbolKeys else letterKeys.map { if (upper) it.toString().uppercase(TR).first() else it }
+    val keys = if (symbols) symbolKeys else letterKeys.map { if (upper) it.toString().uppercase(TR_KEYS).first() else it }
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(12.dp),
