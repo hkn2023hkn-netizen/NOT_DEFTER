@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Gizli bölüm telefonun güvenlik çipine bağlı: Google yedeğine ve cihazdan cihaza aktarıma girmez -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="gizli/" />
+        <exclude domain="sharedpref" path="gizli.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="gizli/" />
+        <exclude domain="sharedpref" path="gizli.xml" />
+    </device-transfer>
+</data-extraction-rules>

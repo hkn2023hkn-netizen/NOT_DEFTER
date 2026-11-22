@@ -173,7 +173,8 @@ private fun SecretSetup(onBack: () -> Unit, onCreated: () -> Unit) {
                 Text(
                     "• Şifre üst üste 3 kez yanlış girilirse buradaki her şey KALICI olarak silinir.\n" +
                         "• Parolayı unutursanız içerik hiçbir şekilde geri getirilemez. Parola hiçbir yerde saklanmaz.\n" +
-                        "• Buradaki notlar yedeğe ve dışa aktarmaya girmez, telefon değişirse taşınmaz.",
+                        "• Buradaki notlar telefonun güvenlik çipine bağlıdır, yalnızca bu telefonda açılır. Telefon sıfırlanır ya da değişirse taşınamaz.\n" +
+                        "• Buradaki notlar yedeğe ve dışa aktarmaya girmez.",
                     fontSize = 14.sp, color = Color(0xFF3E2723)
                 )
             }
@@ -220,6 +221,7 @@ private fun SecretUnlock(onBack: () -> Unit, onWiped: () -> Unit) {
     var remaining by remember { mutableStateOf(SecretVault.MAX_TRIES - SecretVault.failedTries) }
     var wrong by remember { mutableStateOf(false) }
     var wiped by remember { mutableStateOf(false) }
+    var otherDevice by remember { mutableStateOf(false) }
 
     if (wiped) {
         SecretFrame(onBack) {
@@ -232,6 +234,13 @@ private fun SecretUnlock(onBack: () -> Unit, onWiped: () -> Unit) {
     }
     SecretFrame(onBack) {
         StrongPasswordField(pw, { pw = it; wrong = false }, "Şifre", isError = wrong)
+        if (otherDevice) {
+            Text(
+                "Bu kayıt bu telefonda açılamıyor.",
+                color = MaterialTheme.colorScheme.error, fontSize = 13.sp,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+            )
+        }
         if (wrong || remaining < SecretVault.MAX_TRIES) {
             Text(
                 (if (wrong) "Yanlış. " else "") + "Kalan hak: $remaining",
@@ -251,6 +260,7 @@ private fun SecretUnlock(onBack: () -> Unit, onWiped: () -> Unit) {
                         is SecretVault.OpenResult.Ok -> pw = ""
                         is SecretVault.OpenResult.Wrong -> { wrong = true; remaining = r.remaining; pw = "" }
                         is SecretVault.OpenResult.Wiped -> { wiped = true; onWiped() }
+                        is SecretVault.OpenResult.OtherDevice -> { otherDevice = true; pw = "" }
                     }
                 }
             },

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Gizli bölüm telefonun güvenlik çipine bağlı: Google yedeğine ve cihazdan cihaza aktarıma girmez -->
+<full-backup-content>
+    <exclude domain="file" path="gizli/" />
+    <exclude domain="sharedpref" path="gizli.xml" />
+</full-backup-content>

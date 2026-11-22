@@ -24,6 +24,8 @@ import javax.crypto.spec.SecretKeySpec
  * - Parola hiçbir yerde saklanmaz. Doğru parola yalnızca şifre çözme başarılı olunca anlaşılır.
  * - Üst üste 3 yanlış parolada dosya rastgele baytlarla ezilip silinir. Sayaç uygulama kapatılsa da korunur.
  * - Uygulama arka plana geçince kasa hemen kapanır, anahtar bellekten silinir.
+ * - Parolayla şifrelenen içerik bir kez de telefonun güvenlik çipindeki anahtarla (DeviceKey) şifrelenir.
+ *   Dosya başka cihaza kopyalanırsa açılamaz; gizli bölüm telefon değişince taşınamaz.
  */
 object SecretVault {
     data class Note(val id: Long, val title: String, val content: String, val updatedAt: Long)
@@ -32,6 +34,8 @@ object SecretVault {
         object Ok : OpenResult()
         data class Wrong(val remaining: Int) : OpenResult()
         object Wiped : OpenResult()
+        /** Dosya bu telefonun güvenlik anahtarıyla açılamıyor (başka cihazdan gelmiş ya da telefon sıfırlanmış). */
+        object OtherDevice : OpenResult()
     }
 
     const val MAX_TRIES = 3
@@ -94,8 +98,12 @@ object SecretVault {
     /** Parolayla açar. Yanlışsa kalan hakkı döner; hak biterse kasayı siler. (Uzun sürer: arka planda çağırın.) */
     fun open(password: String): OpenResult {
         if (!exists) return OpenResult.Wiped
+        val raw = file.readText()
+        // Yeni biçim: önce cihaz anahtarıyla çözülür. Bu telefonda anahtar yoksa parola hiç denenmez.
+        val inner = if (raw.startsWith(DeviceKey.PREFIX + ":")) DeviceKey.unwrap(raw) ?: return OpenResult.OtherDevice else raw
+        val migrate = !raw.startsWith(DeviceKey.PREFIX + ":")
         val notes = try {
-            val parts = file.readText().split(":")
+            val parts = inner.split(":")
             require(parts.size == 4 && parts[0] == MAGIC)
             val s = unb64(parts[1])
             val k = derive(password, s)
@@ -120,6 +128,8 @@ object SecretVault {
         }
         prefs.edit().putInt("hata", 0).commit()
         _notes.value = notes
+        // Eski biçimdeki kasa, içerik kaybolmadan cihaz anahtarlı yeni biçime taşınır
+        if (migrate) write(notes)
         return OpenResult.Ok
     }
 
@@ -145,6 +155,7 @@ object SecretVault {
         }
         file.delete()
         File(dir, "kasa.tmp").delete()
+        DeviceKey.destroy()
         prefs.edit().putInt("hata", 0).commit()
     }
 
@@ -187,7 +198,9 @@ object SecretVault {
         val ct = cipher.doFinal(arr.toString().toByteArray(Charsets.UTF_8))
         // Önce geçici dosyaya yaz, sonra yer değiştir: yarıda kalan kayıt kasayı bozmasın
         val tmp = File(dir, "kasa.tmp")
-        tmp.writeText("$MAGIC:${b64(s)}:${b64(iv)}:${b64(ct)}")
+        val inner = "$MAGIC:${b64(s)}:${b64(iv)}:${b64(ct)}"
+        // Keystore'u olmayan (çok nadir) telefonlarda yalnızca parola katmanı kalır
+        tmp.writeText(DeviceKey.wrap(inner) ?: inner)
         if (!tmp.renameTo(file)) {
             file.delete(); tmp.renameTo(file)
         }
