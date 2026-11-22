@@ -10,6 +10,7 @@ class NotDefteriApp : Application() {
         super.onCreate()
         Settings.init(this)
         Repository.init(this)
+        com.hakan.notdefteri.security.SecretVault.init(this)
         AlarmScheduler.createChannel(this)
     }
 }

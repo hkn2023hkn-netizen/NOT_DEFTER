@@ -42,6 +42,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -85,13 +87,20 @@ fun AppRoot(needsFullScreenPermission: Boolean, onOpenFullScreenSettings: () -> 
     when (subScreen) {
         "settings" -> { SettingsScreen(onBack = { subScreen = "" }, onOpenTrash = { subScreen = "trash" }); return }
         "trash" -> { TrashScreen(onBack = { subScreen = "settings" }); return }
+        "secret" -> { SecretScreen(onBack = { subScreen = "" }); return }
     }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Gizli giriş: başlığa uzun basınca gizli bölüm açılır (görünür bir düğmesi yok)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.pointerInput(Unit) {
+                            detectTapGestures(onLongPress = { subScreen = "secret" })
+                        }
+                    ) {
                         Image(
                             painterResource(R.drawable.logo), null,
                             Modifier

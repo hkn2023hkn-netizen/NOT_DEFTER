@@ -72,6 +72,8 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         stoppedAt = SystemClock.elapsedRealtime()
+        // Gizli bölüm arka plana geçince hemen kapanır
+        com.hakan.notdefteri.security.SecretVault.close()
     }
 
     override fun onStart() {
