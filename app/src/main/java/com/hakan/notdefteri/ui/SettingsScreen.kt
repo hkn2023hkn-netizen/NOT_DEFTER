@@ -191,7 +191,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenTrash: () -> Unit) {
             )
             SettingRow(
                 "Tümünü dışa aktar (yedek)",
-                "Tüm notlar ve görevler fotoğraflarıyla birlikte ZIP dosyası olarak (kilitli notlar hariç)",
+                "Tüm notlar ve görevler; fotoğraf, ses kaydı ve belgeleriyle birlikte ZIP dosyası olarak (kilitli notlar ve gizli bölüm hariç)",
                 onClick = {
                     busy = "Hazırlanıyor..."
                     scope.launch {

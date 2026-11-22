@@ -36,6 +36,8 @@ object Importer {
         val pinned: Boolean = false,
         val photos: List<String> = emptyList(),
         val isTask: Boolean = false,
+        val audios: List<String> = emptyList(),
+        val files: List<String> = emptyList(),
     )
 
     fun import(context: Context, uris: List<Uri>): Result {
@@ -69,6 +71,9 @@ object Importer {
                 title = d.title.trim(),
                 content = d.content.trim(),
                 photos = d.photos,
+                audios = d.audios,
+                voice = d.audios.isNotEmpty(),
+                files = d.files,
                 createdAt = d.createdAt ?: now,
                 updatedAt = d.createdAt ?: now,
                 pinned = d.pinned,
@@ -94,7 +99,21 @@ object Importer {
                     if (e.isDirectory) continue
                     val n = e.name
                     val lower = n.lowercase()
+                    // Bu uygulamanın yedeğindeki ses kayıtları ve belgeler
+                    val isAudio = n.startsWith("sesler/") || n.contains("/sesler/")
+                    val isDoc = n.startsWith("belgeler/") || n.contains("/belgeler/")
                     when {
+                        isAudio -> {
+                            val target = File(Repository.audioDir, "SES_${UUID.randomUUID()}.${lower.substringAfterLast('.', "wav")}")
+                            target.outputStream().use { zip.copyTo(it) }
+                            images[n] = target.absolutePath
+                        }
+                        isDoc -> {
+                            val dir = File(Repository.docDir, UUID.randomUUID().toString()).apply { mkdirs() }
+                            val target = File(dir, n.substringAfterLast('/'))
+                            target.outputStream().use { zip.copyTo(it) }
+                            images[n] = target.absolutePath
+                        }
                         lower.endsWith(".json") || lower.endsWith(".enex") || lower.endsWith(".md") || lower.endsWith(".txt") ->
                             texts += n to zip.readBytes()
                         lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") ||
@@ -115,7 +134,7 @@ object Importer {
             drafts += d
         }
         // Hiçbir notun kullanmadığı resimleri sil
-        val used = drafts.flatMap { it.photos }.toSet()
+        val used = drafts.flatMap { it.photos + it.audios + it.files }.toSet()
         images.values.filterNot { it in used }.forEach { File(it).delete() }
         return drafts to skipped
     }
@@ -132,6 +151,8 @@ object Importer {
             else -> emptyList()
         }
     }
+
+    private const val LINK_RE = """\[(ses|belge)]\(([^)]+)\)"""
 
     private fun baseName(path: String) = path.substringAfterLast('/').substringBeforeLast('.')
     private fun folderOf(path: String) = if (path.contains('/')) path.substringBeforeLast('/') + "/" else ""
@@ -154,8 +175,20 @@ object Importer {
             val path = images[folderOf(name) + ref] ?: images[ref]
             if (path != null) { photos += path; "" } else m.value
         }
+        val audios = mutableListOf<String>()
+        val files = mutableListOf<String>()
+        val linkRe = Regex(LINK_RE)
+        body = linkRe.replace(body) { m ->
+            val ref = m.groupValues[2].replace("%20", " ").replace("%29", ")")
+            val path = images[folderOf(name) + ref] ?: images[ref]
+            when {
+                path == null -> m.value
+                m.groupValues[1] == "ses" -> { audios += path; "" }
+                else -> { files += path; "" }
+            }
+        }
         val isTask = name.contains("Gorevler/")
-        return Draft(title, body.trim(), null, photos = photos, isTask = isTask)
+        return Draft(title, body.trim(), null, photos = photos, isTask = isTask, audios = audios, files = files)
     }
 
     /** Google Keep (Takeout) JSON notu. */

@@ -246,7 +246,8 @@ ${images.joinToString("\n")}
     }
 
     /**
-     * Tüm notları ve görevleri (kilitli olanlar hariç) Markdown dosyaları ve fotoğraflarıyla bir ZIP'e koyar.
+     * Tüm notları ve görevleri (kilitli olanlar hariç) Markdown dosyaları, fotoğrafları, ses kayıtları ve
+     * belgeleriyle bir ZIP'e koyar.
      * Bu dosya yedek olarak saklanıp daha sonra İçe aktar ile geri yüklenebilir.
      */
     fun createAllZip(context: Context, items: List<Item>): Pair<File, Int> {
@@ -268,8 +269,24 @@ ${images.joinToString("\n")}
                     zip.closeEntry()
                     n
                 }
+                fun addFile(f: File, name: String): String {
+                    zip.putNextEntry(ZipEntry("$folder/$name"))
+                    f.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                    return name
+                }
+                val audioNames = item.audios.mapIndexedNotNull { i, p ->
+                    val f = File(p)
+                    if (f.exists()) addFile(f, "sesler/${base}_${i + 1}.${f.extension.ifBlank { "wav" }}") else null
+                }
+                val docNames = item.files.mapIndexedNotNull { i, p ->
+                    val f = File(p)
+                    if (f.exists()) addFile(f, "belgeler/${base}_${i + 1}/${f.name}") else null
+                }
                 val md = toMarkdown(item, item.title, item.content) +
-                    photoNames.joinToString("") { "\n![]($it)" }
+                    photoNames.joinToString("") { "\n![]($it)" } +
+                    audioNames.joinToString("") { "\n[ses]($it)" } +
+                    docNames.joinToString("") { "\n[belge](${it.replace(" ", "%20").replace(")", "%29")})" }
                 zip.putNextEntry(ZipEntry("$folder/$base.md"))
                 zip.write(md.toByteArray())
                 zip.closeEntry()
