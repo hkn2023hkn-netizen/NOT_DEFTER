@@ -1,28 +1,19 @@
 package com.hakan.notdefteri.ui
 
 import android.Manifest
-import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
-import android.os.Bundle
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -33,30 +24,26 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-
-private fun createRecognizer(context: Context): SpeechRecognizer? = when {
-    SpeechRecognizer.isRecognitionAvailable(context) -> SpeechRecognizer.createSpeechRecognizer(context)
-    Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context) ->
-        SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-    else -> null
-}
+import com.hakan.notdefteri.io.VoiceSession
+import kotlinx.coroutines.delay
 
 /**
- * Uygulama içinde konuşmayı dinleyip yazıya çevirir. Siz "Bitti" diyene kadar dinlemeye devam eder,
- * söylenenler canlı olarak görünür. Telefonda konuşma tanıma servisi yoksa onUnavailable çağrılır.
+ * Sesli not penceresi: konuşmayı kaydeder ve aynı anda yazıya çevirir.
+ * "Bitti" denince yazı ve ses dosyası birlikte döner.
  */
 @Composable
-fun VoiceDialog(onDone: (String) -> Unit, onCancel: () -> Unit, onUnavailable: () -> Unit) {
+fun VoiceDialog(onDone: (text: String, audioPath: String?) -> Unit, onCancel: () -> Unit) {
     val context = LocalContext.current
     var permitted by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
@@ -70,73 +57,28 @@ fun VoiceDialog(onDone: (String) -> Unit, onCancel: () -> Unit, onUnavailable: (
 
     var finalText by remember { mutableStateOf("") }
     var partial by remember { mutableStateOf("") }
-    var listening by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var active by remember { mutableStateOf(true) } // "Bitti"ye basılana kadar yeniden dinle
-
-    fun combined() = listOf(finalText, partial).filter { it.isNotBlank() }.joinToString(" ").trim()
+    var recording by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var seconds by remember { mutableLongStateOf(0L) }
+    val session = remember { arrayOfNulls<VoiceSession>(1) }
 
     if (permitted) {
         DisposableEffect(Unit) {
-            val recognizer = createRecognizer(context)
-            if (recognizer == null) {
-                onUnavailable()
-                return@DisposableEffect onDispose { }
-            }
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "tr-TR")
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
-                putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
-            }
-            fun start() {
-                try {
-                    recognizer.startListening(intent)
-                } catch (e: Exception) {
-                    error = "Dinleme başlatılamadı"
-                }
-            }
-            recognizer.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) { listening = true; error = null }
-                override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
-                override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() { listening = false }
-                override fun onPartialResults(partialResults: Bundle?) {
-                    partial = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-                }
-                override fun onResults(results: Bundle?) {
-                    val t = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-                    if (t.isNotBlank()) finalText = (finalText + " " + t).trim()
-                    partial = ""
-                    listening = false
-                    if (active) start()
-                }
-                override fun onError(code: Int) {
-                    listening = false
-                    partial = ""
-                    when (code) {
-                        // Sessizlik / anlaşılamadı: dinlemeye devam et
-                        SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> if (active) start()
-                        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> { recognizer.cancel(); if (active) start() }
-                        SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT, SpeechRecognizer.ERROR_SERVER ->
-                            error = "İnternet bağlantısı gerekiyor (hata $code)"
-                        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> error = "Mikrofon izni yok"
-                        SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
-                            error = "Türkçe konuşma tanıma bu telefonda yok (hata $code)"
-                        else -> error = "Konuşma tanınamadı (hata $code)"
-                    }
-                }
-                override fun onEvent(eventType: Int, params: Bundle?) {}
-            })
-            start()
+            val s = VoiceSession(
+                context,
+                onText = { f, p -> finalText = f; partial = p },
+                onStatus = { rec, msg -> recording = rec; if (msg != null || rec) message = msg }
+            )
+            session[0] = s
+            recording = s.start()
             onDispose {
-                active = false
-                try { recognizer.cancel() } catch (e: Exception) {}
-                recognizer.destroy()
+                // Pencere "Bitti"/"Vazgeç" dışında kapanırsa kaydı at
+                session[0]?.cancel()
+                session[0] = null
             }
+        }
+        LaunchedEffect(recording) {
+            while (recording) { delay(1000); seconds++ }
         }
     }
 
@@ -144,37 +86,53 @@ fun VoiceDialog(onDone: (String) -> Unit, onCancel: () -> Unit, onUnavailable: (
         onDismissRequest = {},
         icon = {
             Icon(
-                if (listening) Icons.Filled.Mic else Icons.Filled.MicOff, null, Modifier.size(40.dp),
-                tint = if (listening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                Icons.Filled.FiberManualRecord, null, Modifier.size(36.dp),
+                tint = if (recording) Color(0xFFD32F2F) else MaterialTheme.colorScheme.onSurfaceVariant
             )
         },
-        title = { Text(if (denied) "Mikrofon izni gerekli" else if (listening) "Dinliyorum, konuşun..." else "Bekleyin...") },
+        title = {
+            Text(
+                when {
+                    denied -> "Mikrofon izni gerekli"
+                    recording -> "Kaydediliyor  %d:%02d".format(seconds / 60, seconds % 60)
+                    else -> "Bekleyin..."
+                }
+            )
+        },
         text = {
             Column(Modifier.fillMaxWidth()) {
                 if (denied) {
                     Text("Sesli not için mikrofon iznine izin verin. (Ayarlar > Uygulamalar > Not Defteri > İzinler)")
                 } else {
-                    val shown = combined()
                     Column(Modifier.heightIn(min = 60.dp, max = 260.dp).verticalScroll(rememberScrollState())) {
-                        if (shown.isBlank()) {
-                            Text("Söyledikleriniz burada yazıya dönüşecek.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (finalText.isBlank() && partial.isBlank()) {
+                            Text("Konuşun. Ses kaydedilir, söyledikleriniz burada yazıya dönüşür.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         } else {
-                            Text(finalText, fontSize = 17.sp)
+                            if (finalText.isNotBlank()) Text(finalText, fontSize = 17.sp)
                             if (partial.isNotBlank()) Text(partial, fontSize = 17.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    error?.let {
-                        Spacer(Modifier.width(4.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(it, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        }
+                    message?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(it, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     }
                 }
             }
         },
         confirmButton = {
-            Button(onClick = { active = false; onDone(combined()) }) { Text("Bitti") }
+            Button(onClick = {
+                val s = session[0]
+                session[0] = null
+                val audio = s?.finish()
+                onDone(listOf(finalText, partial).filter { it.isNotBlank() }.joinToString(" ").trim(), audio)
+            }) { Text("Bitti") }
         },
-        dismissButton = { TextButton(onClick = { active = false; onCancel() }) { Text("Vazgeç") } }
+        dismissButton = {
+            TextButton(onClick = {
+                session[0]?.cancel()
+                session[0] = null
+                onCancel()
+            }) { Text("Vazgeç") }
+        }
     )
 }

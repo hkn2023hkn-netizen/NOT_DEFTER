@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -202,7 +203,8 @@ fun NoteCard(note: Item, onClick: () -> Unit) {
 fun ItemBadges(item: Item) {
     val due = item.dueAt
     val photoCount = if (item.locked) 0 else item.photos.size
-    if (due == null && photoCount <= 1) return
+    val docCount = if (item.locked) 0 else item.files.size
+    if (due == null && photoCount <= 1 && docCount == 0) return
     val soft = LocalPaper.current.inkSoft
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
         if (due != null) {
@@ -217,6 +219,12 @@ fun ItemBadges(item: Item) {
             Icon(Icons.Filled.PhotoCamera, null, Modifier.size(14.dp), tint = soft)
             Spacer(Modifier.width(3.dp))
             Text("$photoCount", fontSize = 12.sp, color = soft)
+            Spacer(Modifier.width(8.dp))
+        }
+        if (docCount > 0) {
+            Icon(Icons.Filled.AttachFile, null, Modifier.size(14.dp), tint = soft)
+            Spacer(Modifier.width(3.dp))
+            Text("$docCount belge", fontSize = 12.sp, color = soft)
         }
     }
 }

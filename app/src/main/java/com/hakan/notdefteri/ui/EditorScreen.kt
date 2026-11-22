@@ -39,6 +39,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material.icons.filled.CheckBox
@@ -139,6 +141,42 @@ import java.util.Locale
 
 private fun newPhotoFile(): File = File(Repository.photoDir, "IMG_${UUID.randomUUID()}.jpg")
 
+/** Dışarıdan seçilen belgeyi asıl adını koruyarak uygulamanın içine kopyalar. */
+private fun copyToDocs(context: Context, uri: Uri): String? = try {
+    val name = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+        ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+        ?.replace('/', '_')?.ifBlank { null } ?: "belge"
+    val target = File(File(Repository.docDir, UUID.randomUUID().toString()).apply { mkdirs() }, name)
+    context.contentResolver.openInputStream(uri)?.use { input ->
+        target.outputStream().use { input.copyTo(it) }
+    }
+    if (target.length() > 0) target.absolutePath else { target.delete(); null }
+} catch (e: Exception) {
+    null
+}
+
+private fun openDoc(context: Context, path: String) {
+    try {
+        val file = File(path)
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val mime = android.webkit.MimeTypeMap.getSingleton()
+            .getMimeTypeFromExtension(file.extension.lowercase()) ?: "*/*"
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mime)
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(android.content.Intent.createChooser(intent, "Belgeyi aç"))
+    } catch (e: Exception) {
+        Toast.makeText(context, "Bu belgeyi açacak uygulama bulunamadı", Toast.LENGTH_SHORT).show()
+    }
+}
+
+private fun sizeText(bytes: Long): String = when {
+    bytes >= 1024 * 1024 -> "%.1f MB".format(bytes / 1024f / 1024f)
+    bytes >= 1024 -> "${bytes / 1024} KB"
+    else -> "$bytes B"
+}
+
 private fun copyToPhotos(context: Context, uri: Uri): String? = try {
     val target = newPhotoFile()
     context.contentResolver.openInputStream(uri)?.use { input ->
@@ -214,6 +252,7 @@ private fun EditorContent(
     var locked by rememberSaveable { mutableStateOf(original?.locked ?: false) }
     var archived by rememberSaveable { mutableStateOf(original?.archived ?: false) }
     var voiceNote by rememberSaveable { mutableStateOf(original?.voice ?: false) }
+    var filesSaved by rememberSaveable { mutableStateOf(ArrayList(original?.files ?: emptyList())) }
     var audiosSaved by rememberSaveable { mutableStateOf(ArrayList(original?.audios ?: emptyList())) }
     // Fotoğraftan okunan yazı ve bulunan tarih: kullanıcıya sorulacak
     var foundText by remember { mutableStateOf<String?>(null) }
@@ -234,7 +273,7 @@ private fun EditorContent(
     var askPasswordDialog by remember { mutableStateOf(false) }
 
     fun syncPhotos() { photosSaved = ArrayList(photos) }
-    fun isEmpty() = title.isBlank() && content.text.isBlank() && photos.isEmpty() && audiosSaved.isEmpty() && dueAt == null
+    fun isEmpty() = title.isBlank() && content.text.isBlank() && photos.isEmpty() && audiosSaved.isEmpty() && filesSaved.isEmpty() && dueAt == null
 
     fun buildItem(): Item {
         val base = Item(
@@ -243,12 +282,13 @@ private fun EditorContent(
             alarmAtDue = alarmAtDue, done = done, createdAt = createdAt,
             updatedAt = System.currentTimeMillis(), pinned = pinned, favorite = favorite, locked = locked,
             archived = archived, audios = audiosSaved.toList(), voice = voiceNote,
+            files = filesSaved.toList(),
         )
         return if (locked) base.copy(title = "", content = Vault.encrypt(base.title, base.content)) else base
     }
 
     // Otomatik kayıt: her değişiklikte hemen veritabanına yazılır
-    LaunchedEffect(title, content.text, photosSaved, dueAt, before, alarmAtDue, done, pinned, favorite, locked, archived, audiosSaved, voiceNote) {
+    LaunchedEffect(title, content.text, photosSaved, dueAt, before, alarmAtDue, done, pinned, favorite, locked, archived, audiosSaved, voiceNote, filesSaved) {
         val exists = Repository.get(id) != null
         try {
             if (exists || !isEmpty()) Repository.upsert(buildItem())
@@ -262,9 +302,10 @@ private fun EditorContent(
             if (Repository.get(id) != null) Repository.deleteForever(id)
             photos.forEach { File(it).delete() }
             audiosSaved.forEach { File(it).delete() }
+            filesSaved.forEach { File(it).delete() }
         } else {
             try { Repository.upsert(buildItem()) } catch (e: Exception) {}
-            original?.let { Repository.deleteUnusedPhotos(it.photos + it.audios) }
+            original?.let { Repository.deleteUnusedPhotos(it.photos + it.audios + it.files) }
             val due = dueAt
             if (due != null && due < System.currentTimeMillis() && !done) {
                 Toast.makeText(context, "Uyarı: seçilen zaman geçmişte, alarm çalmayacak", Toast.LENGTH_LONG).show()
@@ -316,6 +357,12 @@ private fun EditorContent(
         added.forEach { photos.add(it) }
         syncPhotos()
         readPhotos(added)
+    }
+
+    val pickDocs = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        val added = uris.mapNotNull { copyToDocs(context, it) }
+        if (added.isNotEmpty()) filesSaved = ArrayList(filesSaved + added)
+        if (added.size < uris.size) Toast.makeText(context, "Bazı belgeler eklenemedi", Toast.LENGTH_SHORT).show()
     }
 
     val voice = rememberLauncherForActivityResult(Voice.Contract()) { res ->
@@ -540,6 +587,37 @@ private fun EditorContent(
                     Icon(Icons.Filled.Mic, null, Modifier.size(20.dp)); Spacer(Modifier.width(4.dp)); Text("Sesli", maxLines = 1)
                 }
             }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { pickDocs.launch(arrayOf("*/*")) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Filled.AttachFile, null, Modifier.size(20.dp)); Spacer(Modifier.width(6.dp)); Text("Belge ekle (PDF, Word, Excel...)")
+            }
+            filesSaved.forEach { path ->
+                val f = File(path)
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable { openDoc(context, path) }
+                        .padding(start = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Filled.Description, null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(8.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(f.name, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text(sizeText(f.length()), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    IconButton(onClick = {
+                        filesSaved = ArrayList(filesSaved - path)
+                        if (original?.files?.contains(path) != true) f.delete()
+                    }) { Icon(Icons.Filled.Close, "Belgeyi kaldır") }
+                }
+            }
             if (reading) {
                 Text(
                     "Resimdeki yazı okunuyor...", fontSize = 13.sp,
@@ -654,17 +732,17 @@ private fun EditorContent(
 
     if (voiceDialog) {
         VoiceDialog(
-            onDone = { text ->
+            onDone = { text, audio ->
                 voiceDialog = false
+                if (audio != null) audiosSaved = ArrayList(audiosSaved + audio)
+                if (text.isNotBlank() || audio != null) voiceNote = true
                 if (text.isNotBlank()) {
                     preview = false
-                    voiceNote = true
                     appendText(text)
                     checkDate(text, "Konuşmada")
                 }
             },
-            onCancel = { voiceDialog = false },
-            onUnavailable = { voiceDialog = false; launchVoiceIntent() }
+            onCancel = { voiceDialog = false }
         )
     }
 

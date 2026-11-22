@@ -12,8 +12,8 @@ android {
         applicationId = "com.hakan.notdefteri"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "3.3"
+        versionCode = 9
+        versionName = "3.4"
     }
 
     // Sabit anahtar: her derlemede aynı imza, böylece yeni sürüm eskisinin üzerine kurulabilir.

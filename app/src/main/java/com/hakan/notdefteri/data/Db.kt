@@ -8,7 +8,7 @@ import android.database.sqlite.SQLiteOpenHelper
 import org.json.JSONArray
 
 /** Notların ve görevlerin tutulduğu yerel SQLite veritabanı. */
-class Db(context: Context) : SQLiteOpenHelper(context, "notdefteri.db", null, 3) {
+class Db(context: Context) : SQLiteOpenHelper(context, "notdefteri.db", null, 4) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -31,7 +31,8 @@ class Db(context: Context) : SQLiteOpenHelper(context, "notdefteri.db", null, 3)
                 deleted_at INTEGER,
                 archived INTEGER NOT NULL DEFAULT 0,
                 audios TEXT NOT NULL DEFAULT '[]',
-                voice INTEGER NOT NULL DEFAULT 0
+                voice INTEGER NOT NULL DEFAULT 0,
+                files TEXT NOT NULL DEFAULT '[]'
             )
             """.trimIndent()
         )
@@ -45,6 +46,9 @@ class Db(context: Context) : SQLiteOpenHelper(context, "notdefteri.db", null, 3)
         }
         if (oldVersion < 3) {
             db.execSQL("ALTER TABLE items ADD COLUMN voice INTEGER NOT NULL DEFAULT 0")
+        }
+        if (oldVersion < 4) {
+            db.execSQL("ALTER TABLE items ADD COLUMN files TEXT NOT NULL DEFAULT '[]'")
         }
     }
 
@@ -90,6 +94,7 @@ class Db(context: Context) : SQLiteOpenHelper(context, "notdefteri.db", null, 3)
         put("archived", if (archived) 1 else 0)
         put("audios", JSONArray(audios).toString())
         put("voice", if (voice) 1 else 0)
+        put("files", JSONArray(files).toString())
     }
 
     private fun Cursor.toItem(): Item {
@@ -97,6 +102,7 @@ class Db(context: Context) : SQLiteOpenHelper(context, "notdefteri.db", null, 3)
         fun longOrNull(name: String) = if (isNull(col(name))) null else getLong(col(name))
         val photosJson = JSONArray(getString(col("photos")))
         val audiosJson = JSONArray(getString(col("audios")))
+        val filesJson = JSONArray(getString(col("files")))
         return Item(
             id = getInt(col("id")),
             type = runCatching { ItemType.valueOf(getString(col("type"))) }.getOrDefault(ItemType.NOTE),
@@ -116,6 +122,7 @@ class Db(context: Context) : SQLiteOpenHelper(context, "notdefteri.db", null, 3)
             archived = getInt(col("archived")) == 1,
             audios = List(audiosJson.length()) { audiosJson.getString(it) },
             voice = getInt(col("voice")) == 1,
+            files = List(filesJson.length()) { filesJson.getString(it) },
         )
     }
 }

@@ -32,4 +32,6 @@ data class Item(
     val audios: List<String> = emptyList(),
     /** Sesle yazılmış not: listede "Sesli not" etiketi gösterilir. */
     val voice: Boolean = false,
+    /** Dışarıdan eklenen belgelerin (PDF, Word...) dosya yolları. */
+    val files: List<String> = emptyList(),
 )

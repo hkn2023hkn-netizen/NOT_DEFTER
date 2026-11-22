@@ -35,6 +35,9 @@ object Repository {
     val photoDir: File
         get() = File(appContext.filesDir, "photos").apply { mkdirs() }
 
+    val docDir: File
+        get() = File(appContext.filesDir, "docs").apply { mkdirs() }
+
     val audioDir: File
         get() = File(appContext.filesDir, "audio").apply { mkdirs() }
 
@@ -93,7 +96,7 @@ object Repository {
 
     /** Öğedeki artık kullanılmayan fotoğraf ve ses dosyalarını siler. */
     fun deleteUnusedPhotos(paths: Collection<String>) {
-        val used = _items.value.flatMap { it.photos + it.audios }.toSet()
+        val used = _items.value.flatMap { it.photos + it.audios + it.files }.toSet()
         paths.filterNot { it in used }.forEach { File(it).delete() }
     }
 
@@ -113,7 +116,7 @@ object Repository {
         AlarmScheduler.cancel(appContext, item)
         db.remove(id)
         _items.value = _items.value.filterNot { it.id == id }
-        deleteUnusedPhotos(item.photos + item.audios)
+        deleteUnusedPhotos(item.photos + item.audios + item.files)
     }
 
     fun emptyTrash() {
