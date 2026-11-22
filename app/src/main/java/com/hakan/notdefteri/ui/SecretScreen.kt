@@ -117,24 +117,6 @@ fun SecretScreen(onBack: () -> Unit) {
     }
 }
 
-/** Harf ve rakam yazılabilen, göster/gizle düğmeli parola alanı. */
-@Composable
-private fun StrongPasswordField(value: String, onChange: (String) -> Unit, label: String, isError: Boolean = false) {
-    var visible by remember { mutableStateOf(false) }
-    OutlinedTextField(
-        value = value, onValueChange = onChange, label = { Text(label) }, singleLine = true,
-        isError = isError,
-        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-        trailingIcon = {
-            IconButton(onClick = { visible = !visible }) {
-                Icon(if (visible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, if (visible) "Gizle" else "Göster")
-            }
-        },
-        modifier = Modifier.fillMaxWidth()
-    )
-}
-
 @Composable
 private fun SecretFrame(onBack: () -> Unit, content: @Composable () -> Unit) {
     BackHandler { onBack() }
@@ -147,7 +129,7 @@ private fun SecretFrame(onBack: () -> Unit, content: @Composable () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Hiçbir ad ya da simge yok: yalnızca parola alanı
-        Spacer(Modifier.height(80.dp))
+        Spacer(Modifier.height(40.dp))
         content()
     }
 }
@@ -159,6 +141,7 @@ private fun SecretSetup(onBack: () -> Unit, onCreated: () -> Unit) {
     var pw2 by remember { mutableStateOf("") }
     var agreed by remember { mutableStateOf(false) }
     var working by remember { mutableStateOf(false) }
+    var active by remember { mutableStateOf(0) }
     val weak = SecretVault.weakness(pw)
     val mismatch = pw2.isNotEmpty() && pw != pw2
     SecretFrame(onBack) {
@@ -180,15 +163,19 @@ private fun SecretSetup(onBack: () -> Unit, onCreated: () -> Unit) {
             }
         }
         Spacer(Modifier.height(16.dp))
-        StrongPasswordField(pw, { pw = it }, "Güçlü parola")
+        SecretField(pw, "Güçlü parola", active == 0, { active = 0 })
         Text(
             weak ?: "Parola güçlü",
             fontSize = 13.sp,
             color = if (weak == null) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp)
         )
-        StrongPasswordField(pw2, { pw2 = it }, "Parolayı tekrar yazın", isError = mismatch)
+        SecretField(pw2, "Parolayı tekrar yazın", active == 1, { active = 1 }, isError = mismatch)
         if (mismatch) Text("Parolalar aynı değil", color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+        ScrambledKeyboard(
+            onChar = { c -> if (active == 0) pw += c else pw2 += c },
+            onBackspace = { if (active == 0) pw = pw.dropLast(1) else pw2 = pw2.dropLast(1) }
+        )
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { agreed = !agreed }) {
             Checkbox(checked = agreed, onCheckedChange = { agreed = it })
@@ -233,7 +220,7 @@ private fun SecretUnlock(onBack: () -> Unit, onWiped: () -> Unit) {
         return
     }
     SecretFrame(onBack) {
-        StrongPasswordField(pw, { pw = it; wrong = false }, "Şifre", isError = wrong)
+        SecretField(pw, "Şifre", true, {}, isError = wrong)
         if (otherDevice) {
             Text(
                 "Bu kayıt bu telefonda açılamıyor.",
@@ -269,6 +256,10 @@ private fun SecretUnlock(onBack: () -> Unit, onWiped: () -> Unit) {
             if (working) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
             else Text("Aç", fontSize = 17.sp)
         }
+        ScrambledKeyboard(
+            onChar = { c -> pw += c; wrong = false },
+            onBackspace = { pw = pw.dropLast(1) }
+        )
     }
 }
 
@@ -286,6 +277,10 @@ private fun SecretList(
     var menu by remember { mutableStateOf(false) }
     var changePw by remember { mutableStateOf(false) }
     var confirmWipe by remember { mutableStateOf(false) }
+    if (changePw) {
+        ChangePassword(onClose = { changePw = false })
+        return
+    }
     BackHandler { onBack() }
     Scaffold(
         topBar = {
@@ -332,39 +327,6 @@ private fun SecretList(
                 }
             }
         }
-    }
-
-    if (changePw) {
-        var old by remember { mutableStateOf("") }
-        var new by remember { mutableStateOf("") }
-        var new2 by remember { mutableStateOf("") }
-        var error by remember { mutableStateOf<String?>(null) }
-        var working by remember { mutableStateOf(false) }
-        val weak = SecretVault.weakness(new)
-        AlertDialog(
-            onDismissRequest = { if (!working) changePw = false },
-            title = { Text("Parolayı değiştir") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    StrongPasswordField(old, { old = it; error = null }, "Şimdiki parola")
-                    StrongPasswordField(new, { new = it; error = null }, "Yeni parola")
-                    Text(weak ?: "Parola güçlü", fontSize = 12.sp, color = if (weak == null) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant)
-                    StrongPasswordField(new2, { new2 = it; error = null }, "Yeni parola (tekrar)")
-                    error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
-                }
-            },
-            confirmButton = {
-                TextButton(enabled = !working && weak == null && new == new2 && old.isNotEmpty(), onClick = {
-                    working = true
-                    scope.launch {
-                        val ok = withContext(Dispatchers.Default) { SecretVault.changePassword(old, new) }
-                        working = false
-                        if (ok) changePw = false else error = "Şimdiki parola yanlış"
-                    }
-                }) { Text(if (working) "Bekleyin..." else "Değiştir") }
-            },
-            dismissButton = { TextButton(enabled = !working, onClick = { changePw = false }) { Text("Vazgeç") } }
-        )
     }
 
     if (confirmWipe) {
@@ -462,5 +424,60 @@ private fun SecretEditor(note: SecretVault.Note?, newId: Long, onClose: () -> Un
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Vazgeç") } }
         )
+    }
+}
+
+/** Parola değiştirme: üç alan, tek karışık klavye. Telefonun klavyesi açılmaz. */
+@Composable
+private fun ChangePassword(onClose: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var old by remember { mutableStateOf("") }
+    var new by remember { mutableStateOf("") }
+    var new2 by remember { mutableStateOf("") }
+    var active by remember { mutableStateOf(0) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var working by remember { mutableStateOf(false) }
+    val weak = SecretVault.weakness(new)
+    val mismatch = new2.isNotEmpty() && new != new2
+    fun edit(f: (String) -> String) {
+        error = null
+        when (active) {
+            0 -> old = f(old)
+            1 -> new = f(new)
+            else -> new2 = f(new2)
+        }
+    }
+    SecretFrame(onBack = { if (!working) onClose() }) {
+        Text("Parolayı değiştir", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        SecretField(old, "Şimdiki parola", active == 0, { active = 0 })
+        SecretField(new, "Yeni parola", active == 1, { active = 1 })
+        Text(
+            weak ?: "Parola güçlü", fontSize = 12.sp,
+            color = if (weak == null) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth().padding(start = 4.dp)
+        )
+        SecretField(new2, "Yeni parola (tekrar)", active == 2, { active = 2 }, isError = mismatch)
+        if (mismatch) Text("Parolalar aynı değil", color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(enabled = !working, onClick = onClose, modifier = Modifier.weight(1f)) { Text("Vazgeç") }
+            Button(
+                enabled = !working && weak == null && new == new2 && old.isNotEmpty(),
+                onClick = {
+                    working = true
+                    scope.launch {
+                        val ok = withContext(Dispatchers.Default) { SecretVault.changePassword(old, new) }
+                        working = false
+                        if (ok) onClose() else { error = "Şimdiki parola yanlış"; old = ""; active = 0 }
+                    }
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                if (working) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text("Değiştir")
+            }
+        }
+        ScrambledKeyboard(onChar = { c -> edit { it + c } }, onBackspace = { edit { it.dropLast(1) } })
     }
 }
