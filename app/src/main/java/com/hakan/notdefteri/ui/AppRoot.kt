@@ -43,7 +43,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -94,11 +96,15 @@ fun AppRoot(needsFullScreenPermission: Boolean, onOpenFullScreenSettings: () -> 
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    // Gizli giriş: başlığa uzun basınca gizli bölüm açılır (görünür bir düğmesi yok)
+                    // Gizli giriş: başlığa 5 saniye basılı tutunca açılır (görünür bir düğmesi yok)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.pointerInput(Unit) {
-                            detectTapGestures(onLongPress = { subScreen = "secret" })
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                val released = withTimeoutOrNull(5000L) { waitForUpOrCancellation() }
+                                if (released == null) subScreen = "secret"
+                            }
                         }
                     ) {
                         Image(
