@@ -146,12 +146,9 @@ private fun SecretFrame(onBack: () -> Unit, content: @Composable () -> Unit) {
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.height(24.dp))
-        Icon(Icons.Filled.Lock, null, Modifier.size(56.dp), tint = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.height(12.dp))
+        // Hiçbir ad ya da simge yok: yalnızca parola alanı
+        Spacer(Modifier.height(80.dp))
         content()
-        Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onBack) { Text("Geri dön") }
     }
 }
 
@@ -165,8 +162,6 @@ private fun SecretSetup(onBack: () -> Unit, onCreated: () -> Unit) {
     val weak = SecretVault.weakness(pw)
     val mismatch = pw2.isNotEmpty() && pw != pw2
     SecretFrame(onBack) {
-        Text("Gizli bölüm oluştur", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(12.dp))
         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFE0E0))) {
             Column(Modifier.padding(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -176,9 +171,9 @@ private fun SecretSetup(onBack: () -> Unit, onCreated: () -> Unit) {
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "• Parola üst üste 3 kez yanlış girilirse gizli bölümdeki her şey KALICI olarak silinir.\n" +
+                    "• Şifre üst üste 3 kez yanlış girilirse buradaki her şey KALICI olarak silinir.\n" +
                         "• Parolayı unutursanız içerik hiçbir şekilde geri getirilemez. Parola hiçbir yerde saklanmaz.\n" +
-                        "• Gizli notlar yedeğe ve dışa aktarmaya girmez, telefon değişirse taşınmaz.",
+                        "• Buradaki notlar yedeğe ve dışa aktarmaya girmez, telefon değişirse taşınmaz.",
                     fontSize = 14.sp, color = Color(0xFF3E2723)
                 )
             }
@@ -229,19 +224,17 @@ private fun SecretUnlock(onBack: () -> Unit, onWiped: () -> Unit) {
     if (wiped) {
         SecretFrame(onBack) {
             Text(
-                "Çok fazla yanlış deneme yapıldı.\nGizli bölüm kalıcı olarak silindi.",
+                "Çok fazla yanlış deneme.\nHer şey kalıcı olarak silindi.",
                 fontSize = 18.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold
             )
         }
         return
     }
     SecretFrame(onBack) {
-        Text("Gizli bölüm", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(16.dp))
-        StrongPasswordField(pw, { pw = it; wrong = false }, "Parola", isError = wrong)
+        StrongPasswordField(pw, { pw = it; wrong = false }, "Şifre", isError = wrong)
         if (wrong || remaining < SecretVault.MAX_TRIES) {
             Text(
-                (if (wrong) "Parola yanlış. " else "") + "Kalan hak: $remaining. Hak bitince her şey silinir.",
+                (if (wrong) "Yanlış. " else "") + "Kalan hak: $remaining",
                 color = MaterialTheme.colorScheme.error, fontSize = 13.sp,
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
             )
@@ -287,14 +280,14 @@ private fun SecretList(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Gizli") },
+                title = { },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Kapat") } },
                 actions = {
                     Box {
                         IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "Diğer") }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem(text = { Text("Parolayı değiştir") }, onClick = { menu = false; changePw = true })
-                            DropdownMenuItem(text = { Text("Gizli bölümü tamamen sil") }, onClick = { menu = false; confirmWipe = true })
+                            DropdownMenuItem(text = { Text("Hepsini kalıcı sil") }, onClick = { menu = false; confirmWipe = true })
                         }
                     }
                 },
@@ -305,11 +298,11 @@ private fun SecretList(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onNew, containerColor = Gold) { Icon(Icons.Filled.Add, "Yeni gizli not") }
+            FloatingActionButton(onClick = onNew, containerColor = Gold) { Icon(Icons.Filled.Add, "Yeni not") }
         }
     ) { padding ->
         if (notes.isEmpty()) {
-            Box(Modifier.padding(padding).fillMaxSize()) { EmptyHint("Gizli not yok.\nEklemek için + düğmesine basın.") }
+            Box(Modifier.padding(padding).fillMaxSize()) { EmptyHint("Not yok.\nEklemek için + düğmesine basın.") }
         } else LazyColumn(
             contentPadding = PaddingValues(10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -367,8 +360,8 @@ private fun SecretList(
     if (confirmWipe) {
         AlertDialog(
             onDismissRequest = { confirmWipe = false },
-            title = { Text("Gizli bölüm silinsin mi?") },
-            text = { Text("Tüm gizli notlar kalıcı olarak silinir. Geri alınamaz.") },
+            title = { Text("Hepsi silinsin mi?") },
+            text = { Text("Buradaki tüm notlar kalıcı olarak silinir. Geri alınamaz.") },
             confirmButton = {
                 Button(
                     onClick = { confirmWipe = false; SecretVault.wipe(); onDeleted() },
@@ -408,7 +401,7 @@ private fun SecretEditor(note: SecretVault.Note?, newId: Long, onClose: () -> Un
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Gizli not") },
+                title = { },
                 navigationIcon = { IconButton(onClick = { close() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Geri") } },
                 actions = {
                     IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Filled.Delete, "Sil") }
@@ -441,7 +434,7 @@ private fun SecretEditor(note: SecretVault.Note?, newId: Long, onClose: () -> Un
                     paper = paper, singleLine = true, modifier = Modifier.padding(top = 4.dp)
                 )
                 LinedTextField(
-                    value = content, onValueChange = { content = it }, placeholder = "Gizli notunuzu yazın...",
+                    value = content, onValueChange = { content = it }, placeholder = "Notunuzu yazın...",
                     textStyle = TextStyle(fontSize = 17.sp, lineHeight = 28.sp),
                     paper = paper, minHeight = 340.dp
                 )
@@ -452,7 +445,7 @@ private fun SecretEditor(note: SecretVault.Note?, newId: Long, onClose: () -> Un
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Gizli not silinsin mi?") },
+            title = { Text("Not silinsin mi?") },
             text = { Text("Bu not kalıcı olarak silinir.") },
             confirmButton = {
                 Button(onClick = { confirmDelete = false; SecretVault.delete(id); onClose() }) { Text("Sil") }

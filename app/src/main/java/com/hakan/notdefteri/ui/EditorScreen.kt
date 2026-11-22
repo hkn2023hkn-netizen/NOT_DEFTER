@@ -330,7 +330,8 @@ private fun EditorContent(
         }
     }
 
-    fun launchVoice() {
+    // Telefonda tanıma servisi bulunamazsa Google'ın konuşma ekranı denenir
+    fun launchVoiceIntent() {
         try {
             voice.launch(Unit)
         } catch (e: ActivityNotFoundException) {
@@ -339,6 +340,9 @@ private fun EditorContent(
             Toast.makeText(context, "Sesli not başlatılamadı", Toast.LENGTH_SHORT).show()
         }
     }
+
+    var voiceDialog by rememberSaveable { mutableStateOf(false) }
+    fun launchVoice() { voiceDialog = true }
 
     LaunchedEffect(Unit) {
         if (startVoice && !voiceStarted) { voiceStarted = true; launchVoice() }
@@ -646,6 +650,21 @@ private fun EditorContent(
                 }) { Text("Tamam") }
             },
             dismissButton = { TextButton(onClick = { showTime = false }) { Text("Vazgeç") } }
+        )
+    }
+
+    if (voiceDialog) {
+        VoiceDialog(
+            onDone = { text ->
+                voiceDialog = false
+                if (text.isNotBlank()) {
+                    preview = false
+                    appendText(text)
+                    checkDate(text, "Konuşmada")
+                }
+            },
+            onCancel = { voiceDialog = false },
+            onUnavailable = { voiceDialog = false; launchVoiceIntent() }
         )
     }
 
