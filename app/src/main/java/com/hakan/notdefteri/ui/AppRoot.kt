@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Settings
@@ -21,6 +22,9 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
@@ -56,10 +60,12 @@ fun AppRoot(needsFullScreenPermission: Boolean, onOpenFullScreenSettings: () -> 
     var editorId by rememberSaveable { mutableStateOf(-1) }
     var editorType by rememberSaveable { mutableStateOf(ItemType.NOTE.name) }
     var editorPresetDue by rememberSaveable { mutableStateOf<Long?>(null) }
+    var editorVoice by rememberSaveable { mutableStateOf(false) }
     val allItems by Repository.items.collectAsState()
     val items = allItems.filter { it.deletedAt == null }
 
-    fun openEditor(id: Int, type: ItemType, presetDue: Long? = null) {
+    fun openEditor(id: Int, type: ItemType, presetDue: Long? = null, voice: Boolean = false) {
+        editorVoice = voice
         editorId = id
         editorType = type.name
         editorPresetDue = presetDue
@@ -71,7 +77,8 @@ fun AppRoot(needsFullScreenPermission: Boolean, onOpenFullScreenSettings: () -> 
             itemId = editorId,
             newType = ItemType.valueOf(editorType),
             presetDue = editorPresetDue,
-            onClose = { editorOpen = false }
+            onClose = { editorOpen = false },
+            startVoice = editorVoice
         )
         return
     }
@@ -123,10 +130,20 @@ fun AppRoot(needsFullScreenPermission: Boolean, onOpenFullScreenSettings: () -> 
         },
         floatingActionButton = {
             if (tab != 2) {
-                FloatingActionButton(
-                    onClick = { openEditor(-1, if (tab == 0) ItemType.NOTE else ItemType.TASK) },
-                    containerColor = Gold
-                ) { Icon(Icons.Filled.Add, "Yeni") }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (tab == 0) {
+                        // Sesli not: konuşma hemen yazıya çevrilir
+                        SmallFloatingActionButton(
+                            onClick = { openEditor(-1, ItemType.NOTE, voice = true) },
+                            containerColor = barColor(), contentColor = Color.White
+                        ) { Icon(Icons.Filled.Mic, "Sesli not") }
+                        Spacer(Modifier.height(12.dp))
+                    }
+                    FloatingActionButton(
+                        onClick = { openEditor(-1, if (tab == 0) ItemType.NOTE else ItemType.TASK) },
+                        containerColor = Gold
+                    ) { Icon(Icons.Filled.Add, "Yeni") }
+                }
             }
         }
     ) { padding ->

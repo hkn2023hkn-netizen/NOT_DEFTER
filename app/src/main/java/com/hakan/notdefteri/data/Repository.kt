@@ -14,7 +14,8 @@ import java.io.File
 object Repository {
     private const val TRASH_DAYS = 30L
 
-    private lateinit var appContext: Context
+    lateinit var appContext: Context
+        private set
     private lateinit var db: Db
     private val _items = MutableStateFlow<List<Item>>(emptyList())
 
@@ -33,6 +34,9 @@ object Repository {
 
     val photoDir: File
         get() = File(appContext.filesDir, "photos").apply { mkdirs() }
+
+    val audioDir: File
+        get() = File(appContext.filesDir, "audio").apply { mkdirs() }
 
     /** Sürüm 1'deki items.json dosyasını veritabanına taşır. */
     private fun migrateFromJson() {
@@ -87,9 +91,9 @@ object Repository {
         newItems.forEach { AlarmScheduler.schedule(appContext, it) }
     }
 
-    /** Öğedeki artık kullanılmayan fotoğraf dosyalarını siler. */
+    /** Öğedeki artık kullanılmayan fotoğraf ve ses dosyalarını siler. */
     fun deleteUnusedPhotos(paths: Collection<String>) {
-        val used = _items.value.flatMap { it.photos }.toSet()
+        val used = _items.value.flatMap { it.photos + it.audios }.toSet()
         paths.filterNot { it in used }.forEach { File(it).delete() }
     }
 
@@ -109,7 +113,7 @@ object Repository {
         AlarmScheduler.cancel(appContext, item)
         db.remove(id)
         _items.value = _items.value.filterNot { it.id == id }
-        deleteUnusedPhotos(item.photos)
+        deleteUnusedPhotos(item.photos + item.audios)
     }
 
     fun emptyTrash() {
@@ -129,6 +133,11 @@ object Repository {
     fun togglePinned(id: Int) {
         val item = get(id) ?: return
         upsert(item.copy(pinned = !item.pinned))
+    }
+
+    fun setArchived(id: Int, archived: Boolean) {
+        val item = get(id) ?: return
+        upsert(item.copy(archived = archived, pinned = if (archived) false else item.pinned))
     }
 
     fun toggleFavorite(id: Int) {

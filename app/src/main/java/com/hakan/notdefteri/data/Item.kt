@@ -9,6 +9,8 @@ enum class ItemType { NOTE, TASK }
  * remindBeforeMinutes: zamanından kaç dakika önce alarm çalsın (0 = önceden alarm yok).
  * locked: true ise başlık ve içerik şifrelidir; [content] AES-256 ile şifrelenmiş veriyi tutar, [title] boştur.
  * deletedAt: null değilse not çöp kutusundadır.
+ * archived: true ise not DEPO'dadır ve ana listede görünmez.
+ * audios: sesli not kayıtlarının dosya yolları.
  */
 data class Item(
     val id: Int,
@@ -26,4 +28,6 @@ data class Item(
     val favorite: Boolean = false,
     val locked: Boolean = false,
     val deletedAt: Long? = null,
+    val archived: Boolean = false,
+    val audios: List<String> = emptyList(),
 )

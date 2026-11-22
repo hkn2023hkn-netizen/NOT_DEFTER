@@ -1,5 +1,6 @@
 package com.hakan.notdefteri.ui
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.net.Uri
 import android.widget.Toast
@@ -37,6 +38,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
@@ -112,12 +116,15 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
+import com.hakan.notdefteri.data.DateFinder
 import com.hakan.notdefteri.data.Item
 import com.hakan.notdefteri.data.ItemType
 import com.hakan.notdefteri.data.Markdown
 import com.hakan.notdefteri.data.Repository
 import com.hakan.notdefteri.io.ExportFormat
 import com.hakan.notdefteri.io.Exporter
+import com.hakan.notdefteri.io.ImageText
+import com.hakan.notdefteri.io.Voice
 import com.hakan.notdefteri.security.Vault
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -126,6 +133,9 @@ import java.io.File
 import java.util.Calendar
 import java.util.TimeZone
 import java.util.UUID
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 private fun newPhotoFile(): File = File(Repository.photoDir, "IMG_${UUID.randomUUID()}.jpg")
 
@@ -143,7 +153,7 @@ private fun copyToPhotos(context: Context, uri: Uri): String? = try {
  * Not / görev düzenleyici. Kilitli bir öğe açılıyorsa önce parola sorar.
  */
 @Composable
-fun EditorScreen(itemId: Int, newType: ItemType, presetDue: Long?, onClose: () -> Unit) {
+fun EditorScreen(itemId: Int, newType: ItemType, presetDue: Long?, onClose: () -> Unit, startVoice: Boolean = false) {
     val original = remember(itemId) { Repository.get(itemId) }
     var unlocked by remember { mutableStateOf(original?.locked != true || Vault.isUnlocked) }
     if (!unlocked) {
@@ -170,7 +180,7 @@ fun EditorScreen(itemId: Int, newType: ItemType, presetDue: Long?, onClose: () -
         }
         return
     }
-    EditorContent(original, newType, presetDue, plain.first, plain.second, onClose)
+    EditorContent(original, newType, presetDue, plain.first, plain.second, onClose, startVoice)
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -182,6 +192,7 @@ private fun EditorContent(
     initialTitle: String,
     initialContent: String,
     onClose: () -> Unit,
+    startVoice: Boolean,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -201,6 +212,14 @@ private fun EditorContent(
     var pinned by rememberSaveable { mutableStateOf(original?.pinned ?: false) }
     var favorite by rememberSaveable { mutableStateOf(original?.favorite ?: false) }
     var locked by rememberSaveable { mutableStateOf(original?.locked ?: false) }
+    var archived by rememberSaveable { mutableStateOf(original?.archived ?: false) }
+    var audiosSaved by rememberSaveable { mutableStateOf(ArrayList(original?.audios ?: emptyList())) }
+    // Fotoğraftan okunan yazı ve bulunan tarih: kullanıcıya sorulacak
+    var foundText by remember { mutableStateOf<String?>(null) }
+    var foundDate by remember { mutableStateOf<DateFinder.Found?>(null) }
+    var foundDateSource by remember { mutableStateOf("Resimde") }
+    var reading by remember { mutableStateOf(false) }
+    var voiceStarted by rememberSaveable { mutableStateOf(false) }
     var preview by rememberSaveable { mutableStateOf(original != null && initialContent.isNotBlank()) }
 
     var pendingCameraPath by rememberSaveable { mutableStateOf<String?>(null) }
@@ -214,7 +233,7 @@ private fun EditorContent(
     var askPasswordDialog by remember { mutableStateOf(false) }
 
     fun syncPhotos() { photosSaved = ArrayList(photos) }
-    fun isEmpty() = title.isBlank() && content.text.isBlank() && photos.isEmpty() && dueAt == null
+    fun isEmpty() = title.isBlank() && content.text.isBlank() && photos.isEmpty() && audiosSaved.isEmpty() && dueAt == null
 
     fun buildItem(): Item {
         val base = Item(
@@ -222,12 +241,13 @@ private fun EditorContent(
             photos = photos.toList(), dueAt = dueAt, remindBeforeMinutes = before,
             alarmAtDue = alarmAtDue, done = done, createdAt = createdAt,
             updatedAt = System.currentTimeMillis(), pinned = pinned, favorite = favorite, locked = locked,
+            archived = archived, audios = audiosSaved.toList(),
         )
         return if (locked) base.copy(title = "", content = Vault.encrypt(base.title, base.content)) else base
     }
 
     // Otomatik kayıt: her değişiklikte hemen veritabanına yazılır
-    LaunchedEffect(title, content.text, photosSaved, dueAt, before, alarmAtDue, done, pinned, favorite, locked) {
+    LaunchedEffect(title, content.text, photosSaved, dueAt, before, alarmAtDue, done, pinned, favorite, locked, archived, audiosSaved) {
         val exists = Repository.get(id) != null
         try {
             if (exists || !isEmpty()) Repository.upsert(buildItem())
@@ -240,9 +260,10 @@ private fun EditorContent(
         if (isEmpty()) {
             if (Repository.get(id) != null) Repository.deleteForever(id)
             photos.forEach { File(it).delete() }
+            audiosSaved.forEach { File(it).delete() }
         } else {
             try { Repository.upsert(buildItem()) } catch (e: Exception) {}
-            original?.let { Repository.deleteUnusedPhotos(it.photos) }
+            original?.let { Repository.deleteUnusedPhotos(it.photos + it.audios) }
             val due = dueAt
             if (due != null && due < System.currentTimeMillis() && !done) {
                 Toast.makeText(context, "Uyarı: seçilen zaman geçmişte, alarm çalmayacak", Toast.LENGTH_LONG).show()
@@ -251,17 +272,76 @@ private fun EditorContent(
         onClose()
     }
 
+    fun appendText(text: String) {
+        val t = text.trim()
+        if (t.isEmpty()) return
+        val cur = content.text.trimEnd()
+        val next = if (cur.isEmpty()) t else cur + "\n\n" + t
+        content = TextFieldValue(next, androidx.compose.ui.text.TextRange(next.length))
+    }
+
+    fun checkDate(text: String, source: String) {
+        val f = DateFinder.findUpcoming(text) ?: return
+        foundDateSource = source
+        foundDate = f
+    }
+
+    // Eklenen fotoğraflardaki yazıyı oku; yazı varsa nota eklensin mi diye sor
+    fun readPhotos(paths: List<String>) {
+        if (paths.isEmpty()) return
+        scope.launch {
+            reading = true
+            val text = try {
+                paths.map { ImageText.read(context, it) }.filter { it.isNotBlank() }.joinToString("\n\n")
+            } catch (e: Exception) { "" }
+            reading = false
+            if (text.isNotBlank()) foundText = text
+        }
+    }
+
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val path = pendingCameraPath
         if (path != null) {
-            if (ok && File(path).length() > 0) photos.add(path) else File(path).delete()
+            if (ok && File(path).length() > 0) {
+                photos.add(path)
+                readPhotos(listOf(path))
+            } else File(path).delete()
             syncPhotos()
         }
         pendingCameraPath = null
     }
     val pickImages = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { uris ->
-        uris.mapNotNull { copyToPhotos(context, it) }.forEach { photos.add(it) }
+        val added = uris.mapNotNull { copyToPhotos(context, it) }
+        added.forEach { photos.add(it) }
         syncPhotos()
+        readPhotos(added)
+    }
+
+    val voice = rememberLauncherForActivityResult(Voice.Contract()) { res ->
+        if (res != null) {
+            if (res.text.isNotBlank()) {
+                appendText(res.text)
+            }
+            res.audioPath?.let { audiosSaved = ArrayList(audiosSaved + it) }
+            checkDate(res.text, "Konuşmada")
+            if (res.audioPath == null && res.text.isNotBlank()) {
+                Toast.makeText(context, "Yazıya çevrildi", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun launchVoice() {
+        try {
+            voice.launch(Unit)
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(context, "Telefonda konuşma tanıma bulunamadı (Google uygulamasını yükleyin)", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Toast.makeText(context, "Sesli not başlatılamadı", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (startVoice && !voiceStarted) { voiceStarted = true; launchVoice() }
     }
 
     fun launchCamera() {
@@ -313,6 +393,20 @@ private fun EditorContent(
                                 onClick = { menu = false; toggleLock() }
                             )
                             DropdownMenuItem(
+                                text = { Text(if (archived) "DEPO'dan çıkar" else "DEPO'ya taşı") },
+                                leadingIcon = { Icon(if (archived) Icons.Filled.Unarchive else Icons.Filled.Archive, null) },
+                                onClick = {
+                                    menu = false
+                                    archived = !archived
+                                    if (archived) pinned = false
+                                    Toast.makeText(
+                                        context,
+                                        if (archived) "DEPO'ya taşındı. Ana listede görünmez." else "DEPO'dan çıkarıldı",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            )
+                            DropdownMenuItem(
                                 text = { Text("Dışa aktar / paylaş") },
                                 leadingIcon = { Icon(Icons.Filled.Share, null) },
                                 onClick = { menu = false; exportDialog = true }
@@ -354,6 +448,13 @@ private fun EditorContent(
                 .verticalScroll(rememberScrollState())
                 .padding(12.dp)
         ) {
+            if (archived) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                    Icon(Icons.Filled.Archive, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Bu not DEPO'da saklanıyor", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
             if (locked) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
                     Icon(Icons.Filled.Lock, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
@@ -422,15 +523,32 @@ private fun EditorContent(
             // Fotoğraflar
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(onClick = { launchCamera() }, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Filled.PhotoCamera, null); Spacer(Modifier.width(6.dp)); Text("Fotoğraf çek")
+                val pad = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                FilledTonalButton(onClick = { launchCamera() }, modifier = Modifier.weight(1f), contentPadding = pad) {
+                    Icon(Icons.Filled.PhotoCamera, null, Modifier.size(20.dp)); Spacer(Modifier.width(4.dp)); Text("Fotoğraf", maxLines = 1)
                 }
                 FilledTonalButton(
                     onClick = { pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f), contentPadding = pad
                 ) {
-                    Icon(Icons.Filled.PhotoLibrary, null); Spacer(Modifier.width(6.dp)); Text("Galeriden")
+                    Icon(Icons.Filled.PhotoLibrary, null, Modifier.size(20.dp)); Spacer(Modifier.width(4.dp)); Text("Galeri", maxLines = 1)
                 }
+                FilledTonalButton(onClick = { launchVoice() }, modifier = Modifier.weight(1f), contentPadding = pad) {
+                    Icon(Icons.Filled.Mic, null, Modifier.size(20.dp)); Spacer(Modifier.width(4.dp)); Text("Sesli", maxLines = 1)
+                }
+            }
+            if (reading) {
+                Text(
+                    "Resimdeki yazı okunuyor...", fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+            if (audiosSaved.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                AudioList(audiosSaved, onRemove = { path ->
+                    audiosSaved = ArrayList(audiosSaved - path)
+                    if (original?.audios?.contains(path) != true) File(path).delete()
+                })
             }
             if (photos.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
@@ -528,6 +646,68 @@ private fun EditorContent(
                 }) { Text("Tamam") }
             },
             dismissButton = { TextButton(onClick = { showTime = false }) { Text("Vazgeç") } }
+        )
+    }
+
+    foundText?.let { text ->
+        AlertDialog(
+            onDismissRequest = { foundText = null; checkDate(text, "Resimde") },
+            title = { Text("Resimde yazı bulundu") },
+            text = {
+                Column {
+                    Text("Bu yazı nota eklensin mi?", fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    Box(
+                        Modifier
+                            .heightIn(max = 260.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .verticalScroll(rememberScrollState())
+                            .padding(10.dp)
+                    ) { Text(text, fontSize = 14.sp) }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    foundText = null
+                    preview = false
+                    appendText(text)
+                    checkDate(text, "Resimde")
+                }) { Text("Evet, ekle") }
+            },
+            dismissButton = { TextButton(onClick = { foundText = null; checkDate(text, "Resimde") }) { Text("Hayır") } }
+        )
+    }
+
+    if (foundText == null) foundDate?.let { f ->
+        val millis = f.dateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val shown = f.dateTime.format(DateTimeFormatter.ofPattern("d MMMM yyyy EEEE, HH:mm", Locale("tr")))
+        AlertDialog(
+            onDismissRequest = { foundDate = null },
+            title = { Text("$foundDateSource tarih bulundu") },
+            text = {
+                Column {
+                    Text(shown, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                    if (!f.hasTime) Text("(Saat yazmıyordu, 09:00 olarak ayarlanır)", fontSize = 13.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Text("Takvime eklensin mi? Bir gün önce ve tam zamanında alarm çalar.")
+                    if (dueAt != null) {
+                        Spacer(Modifier.height(6.dp))
+                        Text("Mevcut hatırlatıcının yerine geçer.", fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    dueAt = millis
+                    before = 24 * 60
+                    alarmAtDue = true
+                    done = false
+                    foundDate = null
+                    Toast.makeText(context, "Takvime eklendi", Toast.LENGTH_SHORT).show()
+                }) { Text("Evet, ekle") }
+            },
+            dismissButton = { TextButton(onClick = { foundDate = null }) { Text("Hayır") } }
         )
     }
 

@@ -12,8 +12,8 @@ android {
         applicationId = "com.hakan.notdefteri"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "2.0.2"
+        versionCode = 5
+        versionName = "3.0"
     }
 
     // Sabit anahtar: her derlemede aynı imza, böylece yeni sürüm eskisinin üzerine kurulabilir.
@@ -60,4 +60,6 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    // Fotoğraftaki yazıyı telefonda okumak için (internet gerekmez)
+    implementation("com.google.mlkit:text-recognition:16.0.1")
 }
