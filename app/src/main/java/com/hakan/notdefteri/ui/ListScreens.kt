@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Mic
@@ -32,6 +33,8 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.FilterChip
@@ -73,61 +76,52 @@ fun EmptyHint(text: String) {
     }
 }
 
-/** Arama + filtreler: favoriler, sesli notlar ve DEPO (uzun süre saklananlar). */
+/** Arama + DEPO düğmesi (uzun süre saklanan notlar). */
 @Composable
 private fun SearchAndFilter(
     query: String, onQuery: (String) -> Unit,
-    favOnly: Boolean, onFav: (Boolean) -> Unit,
     depo: Boolean, onDepo: (Boolean) -> Unit, depoCount: Int,
-    voiceOnly: Boolean? = null, onVoice: (Boolean) -> Unit = {},
 ) {
-    Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 2.dp)) {
-        CompactSearch(query, onQuery, Modifier.fillMaxWidth())
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CompactSearch(query, onQuery, Modifier.weight(1f))
+        Spacer(Modifier.width(8.dp))
+        // Mat yeşil, belirgin DEPO düğmesi; seçiliyken koyulaşır
+        Button(
+            onClick = { onDepo(!depo) },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (depo) Color(0xFF3E5B3E) else Color(0xFF6B8F6B),
+                contentColor = Color.White
+            ),
+            shape = RoundedCornerShape(10.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp)
         ) {
-            FilterChip(
-                selected = favOnly, onClick = { onFav(!favOnly) },
-                label = { Text("Favoriler", fontSize = 13.sp) },
-                leadingIcon = { Icon(Icons.Filled.Star, null, Modifier.size(16.dp), tint = if (favOnly) Gold else Color.Gray) }
-            )
-            if (voiceOnly != null) {
-                FilterChip(
-                    selected = voiceOnly, onClick = { onVoice(!voiceOnly) },
-                    label = { Text("Sesli notlar", fontSize = 13.sp) },
-                    leadingIcon = { Icon(Icons.Filled.Mic, null, Modifier.size(16.dp)) }
-                )
-            }
-            FilterChip(
-                selected = depo, onClick = { onDepo(!depo) },
-                label = { Text("DEPO ($depoCount)", fontSize = 13.sp) },
-                leadingIcon = { Icon(Icons.Filled.Archive, null, Modifier.size(16.dp)) }
-            )
+            Icon(if (depo) Icons.Filled.Close else Icons.Filled.Archive, null, Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(if (depo) "DEPO'dan çık" else "DEPO ($depoCount)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
         }
     }
 }
 
-private fun Item.hasVoice() = audios.isNotEmpty()
+private fun Item.hasVoice() = voice || audios.isNotEmpty()
 
 @Composable
 fun NotesScreen(notes: List<Item>, onOpen: (Int) -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
-    var favOnly by rememberSaveable { mutableStateOf(false) }
-    var voiceOnly by rememberSaveable { mutableStateOf(false) }
     var depo by rememberSaveable { mutableStateOf(false) }
     val depoCount = notes.count { it.archived }
     // DEPO'daki notlar ana listede görünmez; yalnızca DEPO seçilince listelenir
     val shown = notes.filter {
-        it.archived == depo && it.matches(query) && (!favOnly || it.favorite) && (!voiceOnly || it.hasVoice())
+        it.archived == depo && it.matches(query)
     }.sortedForList()
     Column {
         SearchAndFilter(
-            query, { query = it }, favOnly, { favOnly = it }, depo, { depo = it }, depoCount,
-            voiceOnly, { voiceOnly = it }
+            query, { query = it }, depo, { depo = it }, depoCount
         )
         if (shown.isEmpty()) {
             EmptyHint(
@@ -168,11 +162,15 @@ fun NoteCard(note: Item, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(start = 12.dp, end = 12.dp, top = 14.dp, bottom = 12.dp)
     ) {
-        if (note.pinned || note.favorite || note.hasVoice()) {
-            Row(Modifier.align(Alignment.End)) {
-                if (note.hasVoice()) Icon(Icons.Filled.Mic, "Sesli not", Modifier.size(16.dp), tint = paper.inkSoft)
+        if (note.hasVoice() || note.pinned) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                if (note.hasVoice()) {
+                    Icon(Icons.Filled.Mic, null, Modifier.size(15.dp), tint = Color(0xFFC62828))
+                    Spacer(Modifier.width(3.dp))
+                    Text("Sesli not", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC62828))
+                }
+                Spacer(Modifier.weight(1f))
                 if (note.pinned) Icon(Icons.Filled.PushPin, "Sabitlenmiş", Modifier.size(16.dp), tint = Color(0xFFC62828))
-                if (note.favorite) Icon(Icons.Filled.Star, "Favori", Modifier.size(16.dp), tint = Color(0xFFE65100))
             }
         }
         if (note.locked) {
@@ -226,17 +224,16 @@ fun ItemBadges(item: Item) {
 @Composable
 fun TasksScreen(tasks: List<Item>, onOpen: (Int) -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
-    var favOnly by rememberSaveable { mutableStateOf(false) }
     var depo by rememberSaveable { mutableStateOf(false) }
     var showAllDone by rememberSaveable { mutableStateOf(false) }
     val depoCount = tasks.count { it.archived }
-    val filtered = tasks.filter { it.archived == depo && it.matches(query) && (!favOnly || it.favorite) }
+    val filtered = tasks.filter { it.archived == depo && it.matches(query) }
     val active = filtered.filter { !it.done }.sortedWith(
         compareByDescending<Item> { it.pinned }.thenBy { it.dueAt ?: Long.MAX_VALUE }.thenByDescending { it.updatedAt }
     )
     val done = filtered.filter { it.done }.sortedByDescending { it.updatedAt }
     Column {
-        SearchAndFilter(query, { query = it }, favOnly, { favOnly = it }, depo, { depo = it }, depoCount)
+        SearchAndFilter(query, { query = it }, depo, { depo = it }, depoCount)
         if (filtered.isEmpty()) {
             EmptyHint(if (depo && depoCount == 0) "DEPO boş." else if (tasks.isEmpty()) "Henüz görev yok.\nYeni görev için + düğmesine basın." else "Sonuç yok")
         } else LazyColumn(
@@ -307,7 +304,6 @@ fun TaskRow(task: Item, onClick: () -> Unit) {
             ItemBadges(task)
         }
         if (task.pinned) Icon(Icons.Filled.PushPin, "Sabitlenmiş", Modifier.size(16.dp), tint = Color(0xFFC62828))
-        if (task.favorite) Icon(Icons.Filled.Star, "Favori", Modifier.size(16.dp), tint = Color(0xFFE65100))
         if (!task.locked) task.photos.firstOrNull()?.let {
             Spacer(Modifier.width(8.dp))
             AsyncImage(

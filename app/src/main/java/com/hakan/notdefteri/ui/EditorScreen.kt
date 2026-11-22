@@ -213,6 +213,7 @@ private fun EditorContent(
     var favorite by rememberSaveable { mutableStateOf(original?.favorite ?: false) }
     var locked by rememberSaveable { mutableStateOf(original?.locked ?: false) }
     var archived by rememberSaveable { mutableStateOf(original?.archived ?: false) }
+    var voiceNote by rememberSaveable { mutableStateOf(original?.voice ?: false) }
     var audiosSaved by rememberSaveable { mutableStateOf(ArrayList(original?.audios ?: emptyList())) }
     // Fotoğraftan okunan yazı ve bulunan tarih: kullanıcıya sorulacak
     var foundText by remember { mutableStateOf<String?>(null) }
@@ -241,13 +242,13 @@ private fun EditorContent(
             photos = photos.toList(), dueAt = dueAt, remindBeforeMinutes = before,
             alarmAtDue = alarmAtDue, done = done, createdAt = createdAt,
             updatedAt = System.currentTimeMillis(), pinned = pinned, favorite = favorite, locked = locked,
-            archived = archived, audios = audiosSaved.toList(),
+            archived = archived, audios = audiosSaved.toList(), voice = voiceNote,
         )
         return if (locked) base.copy(title = "", content = Vault.encrypt(base.title, base.content)) else base
     }
 
     // Otomatik kayıt: her değişiklikte hemen veritabanına yazılır
-    LaunchedEffect(title, content.text, photosSaved, dueAt, before, alarmAtDue, done, pinned, favorite, locked, archived, audiosSaved) {
+    LaunchedEffect(title, content.text, photosSaved, dueAt, before, alarmAtDue, done, pinned, favorite, locked, archived, audiosSaved, voiceNote) {
         val exists = Repository.get(id) != null
         try {
             if (exists || !isEmpty()) Repository.upsert(buildItem())
@@ -319,6 +320,7 @@ private fun EditorContent(
 
     val voice = rememberLauncherForActivityResult(Voice.Contract()) { res ->
         if (res != null) {
+            if (res.text.isNotBlank() || res.audioPath != null) voiceNote = true
             if (res.text.isNotBlank()) {
                 appendText(res.text)
             }
@@ -384,9 +386,6 @@ private fun EditorContent(
                     }
                     IconButton(onClick = { pinned = !pinned }) {
                         Icon(if (pinned) Icons.Filled.PushPin else Icons.Outlined.PushPin, if (pinned) "Sabitlemeyi kaldır" else "Sabitle")
-                    }
-                    IconButton(onClick = { favorite = !favorite }) {
-                        Icon(if (favorite) Icons.Filled.Star else Icons.Filled.StarBorder, "Favori", tint = if (favorite) Gold else Color.White)
                     }
                     Box {
                         IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "Diğer") }
@@ -659,6 +658,7 @@ private fun EditorContent(
                 voiceDialog = false
                 if (text.isNotBlank()) {
                     preview = false
+                    voiceNote = true
                     appendText(text)
                     checkDate(text, "Konuşmada")
                 }

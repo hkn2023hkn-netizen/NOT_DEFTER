@@ -30,4 +30,6 @@ data class Item(
     val deletedAt: Long? = null,
     val archived: Boolean = false,
     val audios: List<String> = emptyList(),
+    /** Sesle yazılmış not: listede "Sesli not" etiketi gösterilir. */
+    val voice: Boolean = false,
 )

@@ -8,7 +8,7 @@ import android.database.sqlite.SQLiteOpenHelper
 import org.json.JSONArray
 
 /** Notların ve görevlerin tutulduğu yerel SQLite veritabanı. */
-class Db(context: Context) : SQLiteOpenHelper(context, "notdefteri.db", null, 2) {
+class Db(context: Context) : SQLiteOpenHelper(context, "notdefteri.db", null, 3) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -30,7 +30,8 @@ class Db(context: Context) : SQLiteOpenHelper(context, "notdefteri.db", null, 2)
                 locked INTEGER NOT NULL DEFAULT 0,
                 deleted_at INTEGER,
                 archived INTEGER NOT NULL DEFAULT 0,
-                audios TEXT NOT NULL DEFAULT '[]'
+                audios TEXT NOT NULL DEFAULT '[]',
+                voice INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent()
         )
@@ -41,6 +42,9 @@ class Db(context: Context) : SQLiteOpenHelper(context, "notdefteri.db", null, 2)
             // Sürüm 3: DEPO ve sesli notlar
             db.execSQL("ALTER TABLE items ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")
             db.execSQL("ALTER TABLE items ADD COLUMN audios TEXT NOT NULL DEFAULT '[]'")
+        }
+        if (oldVersion < 3) {
+            db.execSQL("ALTER TABLE items ADD COLUMN voice INTEGER NOT NULL DEFAULT 0")
         }
     }
 
@@ -85,6 +89,7 @@ class Db(context: Context) : SQLiteOpenHelper(context, "notdefteri.db", null, 2)
         if (deletedAt != null) put("deleted_at", deletedAt) else putNull("deleted_at")
         put("archived", if (archived) 1 else 0)
         put("audios", JSONArray(audios).toString())
+        put("voice", if (voice) 1 else 0)
     }
 
     private fun Cursor.toItem(): Item {
@@ -110,6 +115,7 @@ class Db(context: Context) : SQLiteOpenHelper(context, "notdefteri.db", null, 2)
             deletedAt = longOrNull("deleted_at"),
             archived = getInt(col("archived")) == 1,
             audios = List(audiosJson.length()) { audiosJson.getString(it) },
+            voice = getInt(col("voice")) == 1,
         )
     }
 }
